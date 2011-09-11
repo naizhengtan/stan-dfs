@@ -9,7 +9,12 @@
 lock_server::lock_server():
   nacquire (0)
 {
-  pthread_mutex_init(&mutex,NULL);
+  assert(pthread_mutex_init(&mutex,NULL)==0);
+}
+
+lock_server::~lock_server(){
+  assert(pthread_mutex_destroy(&mutex)==0);
+  //FIXME
 }
 
 lock_protocol::status
@@ -25,7 +30,8 @@ lock_protocol::status
 lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 {
   lock_protocol::status ret = lock_protocol::OK;
-  pthread_mutex_lock(&mutex);
+  ScopedLock acq(&mutex);
+  //pthread_mutex_lock(&mutex);
   lock_map::iterator it = server_map.find(lid);
   //if the lock is found
   if(it != server_map.end()){
@@ -33,7 +39,6 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
     if(it->second.state==LOCK_FREE){
       it->second.state=LOCK_LOCKED;
       it->second.owner = clt;
-
     }
     //lock is locked
     else{
@@ -48,13 +53,13 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
   else{
     lock_t temp;
     temp.state = LOCK_LOCKED;
-    pthread_cond_init(&(temp.cond_v),NULL);
+    assert(pthread_cond_init(&(temp.cond_v),NULL)==0);
     temp.owner = clt;
     server_map.insert(lock_map::value_type(lid,temp));
   }
 
   dprintf("lock_server:lock %d acquire succeed.\n",lid);
-  pthread_mutex_unlock(&mutex);
+  //pthread_mutex_unlock(&mutex);
 
   return ret;
 }
@@ -63,7 +68,8 @@ lock_protocol::status
 lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 {
   lock_protocol::status ret = lock_protocol::OK;
-  pthread_mutex_lock(&mutex);
+  ScopedLock rel(&mutex);
+  //pthread_mutex_lock(&mutex);
   lock_map::iterator it = server_map.find(lid);
   //if the lock is found
   if(it!=server_map.end()){
@@ -81,6 +87,6 @@ lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
   else{
     //FIXME
   }
-  pthread_mutex_unlock(&mutex);
+  //pthread_mutex_unlock(&mutex);
   return ret;
 }
