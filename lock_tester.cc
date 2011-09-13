@@ -172,6 +172,7 @@ main(int argc, char *argv[])
     assert(pthread_mutex_init(&count_mutex, NULL) == 0);
 
     printf("simple lock client\n");
+	while(1){
     for (int i = 0; i < nt; i++) lc[i] = new lock_client(dst);
     if(!test || test == 1){
       test1();
@@ -233,5 +234,5 @@ main(int argc, char *argv[])
     }
 
     printf ("%s: passed all tests successfully\n", argv[0]);
-
+	}
 }

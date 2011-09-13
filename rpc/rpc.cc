@@ -635,7 +635,6 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 	  it->second = xid_rep;
 	else
 	  xid_rep = it->second; //gurrentee that xid_rep is the latest value
-
 	//FORGOTTEN:if the xid < xid_rep
 	if(xid<xid_rep)
 	  return FORGOTTEN;
@@ -645,6 +644,10 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 	std::list<reply_t>::iterator fit = lit->second.begin();
 	while(fit!=lit->second.end()){
 	  if(fit->xid==xid){
+		//check if req is INPROGRESS
+		if(fit->sz == -1)
+		  return INPROGRESS;
+		//req is DONE
 		*b = fit->buf;
 		*sz = fit ->sz;
 		return DONE;
@@ -658,7 +661,7 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 		fit++;
 	}
 	//FIXME:how can I know the req is INPROGRESS??
-	
+	add_reply(clt_nonce,xid,NULL,-1);
 	// You fill this in for Lab 1.
 	return NEW;
 }
@@ -672,13 +675,28 @@ void
 rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 		char *b, int sz)
 {
-	ScopedLock rwl(&reply_window_m_);
-        // You fill this in for Lab 1.
-	struct reply_t temp(xid);
-	temp.buf=b;
-	temp.sz=sz;
+  //come from checkduplicate_and_update
+  if(sz==-1){
+  	struct reply_t temp(xid);
+	temp.sz=-1;
 	std::map<unsigned int,std::list<reply_t> >::iterator it = reply_window_.find(clt_nonce);
-    it->second.push_back(temp);
+	it->second.push_back(temp);
+	return;
+  }
+	//come from dispatch
+	ScopedLock rwl(&reply_window_m_);
+	// You fill this in for Lab 1.
+	std::map<unsigned int,std::list<reply_t> >::iterator it = reply_window_.find(clt_nonce);
+	std::list<reply_t>::iterator lit = it->second.begin();
+	for(;lit!=it->second.end();lit++){
+	  if(lit->xid == xid){
+		lit->buf = b;
+		lit->sz = sz;
+		return;
+	  }
+	}
+	printf("ERROR: no item in the list.\n");
+	assert(0);
 }
 
 void
