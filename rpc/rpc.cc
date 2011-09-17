@@ -189,7 +189,7 @@ int
 rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 		TO to)
 {
-
+    //setup the caller which contains (1)req_header (2)trans data
 	caller ca(0, &rep);
         int xid_rep;
 	{
@@ -223,7 +223,7 @@ rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 
 	bool transmit = true;
 	connection *ch = NULL;
-
+	//send the req out from ch (point to chan_)
 	while (1){
 		if(transmit){
 			get_refconn(&ch);
@@ -248,7 +248,7 @@ rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 			}
 			transmit = false; // only send once on a given channel
 		}
-
+		//when time out break
 		if(!finaldeadline.tv_sec)
 			break;
 
@@ -259,6 +259,8 @@ rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 			finaldeadline.tv_sec = 0;
 		}
 
+		//.....(rpcc->network->rpcs->network->rpcc)
+		//wait for reply
 		{
 			ScopedLock cal(&ca.m);
 			while (!ca.done){
@@ -271,10 +273,11 @@ rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 			}
 			if(ca.done){
 			        jsl_log(JSL_DBG_2, "rpcc::call1: reply received\n");
-				break;
+					break;//jump out while(1)
 			}
 		}
 
+		//fail to receive the reply (!ca.done) 
 		if(retrans_ && (!ch || ch->isdead())){
 			// since connection is dead, retransmit
                         // on the new connection 
@@ -322,6 +325,7 @@ rpcc::call1(unsigned int proc, marshall &req, unmarshall &rep,
 	return (ca.done? ca.intret : rpc_const::timeout_failure);
 }
 
+//make sure ch point to chan_
 void
 rpcc::get_refconn(connection **ch)
 {
@@ -648,8 +652,42 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 		unsigned int xid_rep, char **b, int *sz)
 {
 	ScopedLock rwl(&reply_window_m_);
-
-        // You fill this in for Lab 1.
+	//update the rereply_window_
+	std::map<unsigned int,unsigned int>::iterator it = rereply_window_.find(clt_nonce);
+	if(it==rereply_window_.end())
+	  rereply_window_.insert(std::pair<unsigned int,unsigned int>(clt_nonce,xid_rep));
+	else if(xid_rep > it->second)
+	  it->second = xid_rep;
+	else
+	  xid_rep = it->second; //gurrentee that xid_rep is the latest value
+	//FORGOTTEN:if the xid < xid_rep
+	if(xid<xid_rep)
+	  return FORGOTTEN;
+	//DONE:if reply find in the reply_window_
+	//side effect:clear the reply_window_
+	std::map<unsigned int,std::list<reply_t> >::iterator lit = reply_window_.find(clt_nonce);
+	std::list<reply_t>::iterator fit = lit->second.begin();
+	while(fit!=lit->second.end()){
+	  if(fit->xid==xid){
+		//check if req is INPROGRESS
+		if(fit->sz == -1)
+		  return INPROGRESS;
+		//req is DONE
+		*b = fit->buf;
+		*sz = fit ->sz;
+		return DONE;
+	  }
+	  //out of date
+	  if(fit->xid < xid_rep){
+		free(fit->buf);
+		fit = lit->second.erase(fit);//fit will add
+	  }
+	  else
+		fit++;
+	}
+	//FIXME:how can I know the req is INPROGRESS??
+	add_reply(clt_nonce,xid,NULL,-1);
+	// You fill this in for Lab 1.
 	return NEW;
 }
 
@@ -662,8 +700,28 @@ void
 rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 		char *b, int sz)
 {
+  //come from checkduplicate_and_update
+  if(sz==-1){
+  	struct reply_t temp(xid);
+	temp.sz=-1;
+	std::map<unsigned int,std::list<reply_t> >::iterator it = reply_window_.find(clt_nonce);
+	it->second.push_back(temp);
+	return;
+  }
+	//come from dispatch
 	ScopedLock rwl(&reply_window_m_);
-        // You fill this in for Lab 1.
+	// You fill this in for Lab 1.
+	std::map<unsigned int,std::list<reply_t> >::iterator it = reply_window_.find(clt_nonce);
+	std::list<reply_t>::iterator lit = it->second.begin();
+	for(;lit!=it->second.end();lit++){
+	  if(lit->xid == xid){
+		lit->buf = b;
+		lit->sz = sz;
+		return;
+	  }
+	}
+	printf("ERROR: no item in the list.\n");
+	assert(0);
 }
 
 void
