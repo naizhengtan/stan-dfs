@@ -14,7 +14,7 @@ lock_server::lock_server():
 
 lock_server::~lock_server(){
   assert(pthread_mutex_destroy(&mutex)==0);
-  //FIXME
+  //FIXME destroy
 }
 
 lock_protocol::status
@@ -44,7 +44,7 @@ lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
     else{
       //wait in condition variable
       while(it->second.state==LOCK_LOCKED)
-	pthread_cond_wait(&it->second.cond_v,&mutex);
+		pthread_cond_wait(&it->second.cond_v,&mutex);
       it->second.state=LOCK_LOCKED;
       it->second.owner = clt;
     }

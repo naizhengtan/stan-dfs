@@ -90,4 +90,93 @@ yfs_client::getdir(inum inum, dirinfo &din)
 }
 
 
+int
+yfs_client::create(inum parent,const char* name,inum &inum){
+  int r =OK;
+  //check if the file is exist
+  int inode;
+  std::string content,fname;
+  std::ostringstream os;
 
+  int re = ec->get(parent,content);//??content
+  if(re != extent_protocol::OK){
+	return re;
+  }
+  std::istringstream is(content);
+  is>>fname;//eliminate dir's name
+  do{
+	is>>fname;//get the file name
+	is>>inode;//get the inum of the file
+	if(fname == name){//there is already have the file name
+	  r = EXIST;
+	  goto release;
+	}
+  }while(!is.eof());
+
+  //generate the file's inum
+  //FIXME
+  srandom(time(NULL));
+  inum = random();
+  inum |= 0x80000000;
+  printf("create %016llx [%s]\n",inum,name);
+
+  //new (name,inum), add node in extent_server
+  re = ec->put(inum,name);
+  if(re == extent_protocol::NOENT){//the inum is collision,FIXME
+	r = EXIST;
+	goto release;
+  }
+  else if(re != extent_protocol::OK){//Other error
+	r = IOERR;
+	goto release;
+  }
+  printf("add [%s] to parent %016llx\n",name,parent);
+
+  //add the file to the dir
+  os<<content;
+  os<<name<<"\n";
+  os<<inum<<"\n";
+  re = ec->put(parent,content);
+  if(re!=extent_protocol::OK)
+	r = IOERR;
+
+ release:
+  return r;
+  
+}
+
+int 
+yfs_client::readdir(inum parent,std::map<std::string,inum> &map){
+  std::string content;
+  int re = ec->get(parent,content);
+  if(re!=extent_protocol::OK){
+	return IOERR;
+  }
+  //parse the string
+  inum inode;
+  std::string fname;
+  std::istringstream is(content);
+  is>>fname;//eliminate the dir name
+  do{
+	is>>fname;
+	is>>inode;
+	if(fname!="")
+	  map.insert(std::pair<std::string,inum>(fname,inode));
+  }while(!is.eof());
+  
+  return OK;
+}
+
+int yfs_client::lookup(inum parent,const char* name,inum& finum){
+  std::map<std::string,inum> map;
+  finum = -1;
+  //get the content of the dir
+  int re = readdir(parent,map);
+  if(re!=OK)
+	return re;
+  //check if there is name
+  std::map<std::string,inum>::iterator it = map.find(name);
+  if(it!=map.end())
+	finum = it->second;
+  return OK;
+}

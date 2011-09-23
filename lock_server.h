@@ -13,12 +13,7 @@
 #include <pthread.h>
 //#define LOCK_FREE 0
 //#defnie LOCK_LOCKED 1
-#define DEBUG
-#ifdef DEBUG
-#define dprintf(x...) printf(x)
-#else
-#define dprintf(x...)
-#endif
+#include "debug.h"
 
 class lock_server {
 

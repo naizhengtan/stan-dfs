@@ -5,6 +5,7 @@
 //#include "yfs_protocol.h"
 #include "extent_client.h"
 #include <vector>
+#include <map>
 
 
 class yfs_client {
@@ -43,6 +44,10 @@ class yfs_client {
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
+  //lab2 code
+  int create(inum,const char*,inum &);
+  int readdir(inum,std::map<std::string,inum>&);
+  int lookup(inum,const char*,inum&);
 };
 
 #endif 
