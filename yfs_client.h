@@ -48,6 +48,9 @@ class yfs_client {
   int create(inum,const char*,inum &);
   int readdir(inum,std::map<std::string,inum>&);
   int lookup(inum,const char*,inum&);
+  int setattr_size(inum,unsigned long long);
+  int read(inum,unsigned long long,unsigned long long,char*);
+  int write(inum,unsigned long long, unsigned long long, const char*);
 };
 
 #endif 

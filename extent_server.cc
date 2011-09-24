@@ -25,24 +25,57 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
   
   extent_map_t::iterator it = extent_map.find(id);
   bool exist = it!=extent_map.end();
-  if(exist)
+  //patch for set_attr
+  if(*buf.begin()=='#'){//# stands for size
+	if(exist){
+	  char sign;int nsize;
+	  std::istringstream is(buf);
+	  is>>sign;
+	  is>>nsize;
+	  it->second.attr.size = nsize;
+	  it->second.attr.ctime = time(NULL);
+	  //do the truncating or expanding thing
+	  //get name
+	  std::istringstream names(it->second.value);
+	  std::string name;
+	  names>>name;
+	  //get others
+	  int pos = it->second.value.find_first_of('\n');
+	  std::string content  = it->second.value.substr(pos+1);
+	  //put it back
+	  std::ostringstream os;
+	  os<<name<<"\n";
+	  os<<content.substr(0,nsize);
+	  for(int i=content.length();i<nsize;i++){
+		os<<'\0';
+	  }
+	  it->second.value = os.str();
+	  return extent_protocol::OK;
+	}
+	else{
+	  return extent_protocol::NOENT;
+	}
+  }
+  //new or modify a file
+  unsigned int old_ctime = 0;
+  if(exist){
+	old_ctime = it->second.attr.ctime;
 	extent_map.erase(id);
-  //check wether this node is exist
-  //---if(!exist){//the file/dir is new
+  }
+
   extent_data_t tmp;
   tmp.value = buf;
-  tmp.attr.atime=tmp.attr.mtime=tmp.attr.ctime = time(NULL);//FIXME
-  tmp.attr.size=buf.size();
-  
+  if(old_ctime==0)
+	tmp.attr.ctime=time(NULL);
+  else
+	tmp.attr.ctime=old_ctime;
+  tmp.attr.atime=tmp.attr.mtime= time(NULL);
+  //eliminate the name size
+  tmp.attr.size=buf.size()-buf.find_first_of('\n')-1;
+    
   extent_map.insert(extent_map_t::value_type(id,tmp));
-  dprintf("extent_server: SUCESS put id:%d value:%s\n",id,buf);
+  dprintf("extent_server: SUCESS put id:%d size:%d\n",id,tmp.attr.size);
   return extent_protocol::OK;
-  //---}
-  /*---
-	else{//there is a exist file/dir
-	return extent_protocol::NOENT;//FIXME
-	}
-  */
 }
 
 
@@ -55,6 +88,7 @@ int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 	return extent_protocol::NOENT;//FIXME
   //find the id
   buf=it->second.value;
+  it->second.attr.atime=time(NULL);
   return extent_protocol::OK;
 }
 
