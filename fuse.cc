@@ -18,6 +18,8 @@
 #include "lang/verify.h"
 #include "yfs_client.h"
 
+#include "debug.h"
+
 int myid;
 yfs_client *yfs;
 
@@ -86,26 +88,54 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set
     printf("   fuseserver_setattr set size to %zu\n", attr->st_size);
     struct stat st;
     // You fill this in for Lab 2
+	yfs_client::status re = yfs->setattr_size(ino,attr->st_size);
+	if(re!=yfs_client::OK){
+	  //FIXME
+	  fuse_reply_err(req, ENOSYS);
+	}
+	/**
+	   what st does he want, 
+	   the attr in the parameter?
+	   or full attr from server?	*/
+	re = getattr(ino,st);
+	if(re!=yfs_client::OK){
+	  fuse_reply_err(req,ENOSYS);//FIXME
+	}
+	fuse_reply_attr(req,&st,0);
+	/*
 #if 0
     fuse_reply_attr(req, &st, 0);
 #else
     fuse_reply_err(req, ENOSYS);
 #endif
+	*/
   } else {
     fuse_reply_err(req, ENOSYS);
   }
 }
 
 void
-fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
+fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size ,
       off_t off, struct fuse_file_info *fi)
 {
   // You fill this in for Lab 2
-#if 0
-  fuse_reply_buf(req, buf, size);
-#else
-  fuse_reply_err(req, ENOSYS);
-#endif
+  /**
+	 the read contain the name? contain now...
+  */
+  if(!yfs->isfile(ino)){
+	fuse_reply_err(req, ENOSYS);//FIXME
+	return;
+  }
+  char *buf = (char *)malloc(size);
+  memset(buf,0,size);
+  int ret = yfs->read(ino,size,off,buf);
+  if(ret!=yfs_client::OK){
+	fuse_reply_err(req, ENOSYS);
+  }
+  else{
+	fuse_reply_buf(req, buf, size);
+  }
+  free(buf);
 }
 
 void
@@ -114,11 +144,17 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
   struct fuse_file_info *fi)
 {
   // You fill this in for Lab 2
-#if 0
-  fuse_reply_write(req, bytes_written);
-#else
-  fuse_reply_err(req, ENOSYS);
-#endif
+  if(!yfs->isfile(ino)){
+	fuse_reply_err(req, ENOSYS);//FIXME
+	return;
+  }
+  int ret = yfs->write(ino,size,off,buf);
+  if(ret!=yfs_client::OK){
+	fuse_reply_err(req, ENOSYS);//FIXME
+  }
+  else{
+	fuse_reply_write(req, size);
+  }
 }
 
 yfs_client::status
@@ -130,7 +166,24 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
   e->entry_timeout = 0.0;
   e->generation = 0;
   // You fill this in for Lab 2
-  return yfs_client::NOENT;
+  //call yfs->create
+  yfs_client::inum inum;
+  yfs_client::status ret = yfs->create((yfs_client::inum)parent, name , inum);
+  if(ret!=yfs_client::OK){
+	//FIXME
+  }
+  dprintf("//fuse// create from yfs %016llx success:%d\n",inum,(ret==yfs_client::OK));
+  e->ino = inum;
+  //check whether the file exists
+  if(ret==yfs_client::EXIST)
+	return ret;
+  //getattr for e->attr
+  else if(ret==yfs_client::OK){
+	ret = getattr(e->ino,e->attr);
+	return ret;
+  }
+  return ret;
+  //return yfs_client::NOENT;
 }
 
 void
@@ -179,6 +232,21 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
   // Look up the file named `name' in the directory referred to by
   // `parent' in YFS. If the file was found, initialize e.ino and
   // e.attr appropriately.
+  unsigned long long finum;
+  yfs_client::status re = yfs->lookup(parent,name,finum);
+  dprintf("//fuse// look [%s]:%016llx  from parent %016llx\n",name,finum,parent);
+  if(re!=yfs_client::OK){
+	//FIXME
+  }
+  if(finum != -1){
+	found = true;
+	e.ino = finum;
+	re = getattr(finum,e.attr);
+	if(re!=yfs_client::OK){
+	  //FIXME
+	  found = false;
+	}
+  }
 
   if (found)
     fuse_reply_entry(req, &e);
@@ -234,8 +302,16 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
   // You fill this in for Lab 2
   // Ask the yfs_client for the file names / i-numbers
   // in directory inum, and call dirbuf_add() for each.
-
-
+  std::map<std::string,unsigned long long> map;
+  yfs_client::status re = yfs->readdir(inum,map);
+  if(re!=yfs_client::OK){
+	//FIXME
+  }
+  std::map<std::string,unsigned long long>::iterator it = map.begin();
+  for(;it!=map.end();it++){
+	dirbuf_add(&b,it->first.c_str(),it->second);
+  }
+  
   reply_buf_limited(req, b.p, b.size, off, size);
   free(b.p);
 }
