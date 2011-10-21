@@ -14,7 +14,8 @@
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
-
+  lc = new lock_client(lock_dst);
+  srandom(getpid());
 }
 
 yfs_client::inum
@@ -55,7 +56,6 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   // You modify this function for Lab 3
   // - hold and release the file lock
 
-  printf("getfile %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
     r = IOERR;
@@ -66,10 +66,9 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   fin.mtime = a.mtime;
   fin.ctime = a.ctime;
   fin.size = a.size;
-  printf("getfile %016llx -> sz %llu\n", inum, fin.size);
+  printf("//yfs// getfile %016llx -> sz %llu\n", inum, fin.size);
 
  release:
-
   return r;
 }
 
@@ -80,7 +79,6 @@ yfs_client::getdir(inum inum, dirinfo &din)
   // You modify this function for Lab 3
   // - hold and release the directory lock
 
-  printf("getdir %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
     r = IOERR;
@@ -90,6 +88,7 @@ yfs_client::getdir(inum inum, dirinfo &din)
   din.mtime = a.mtime;
   din.ctime = a.ctime;
 
+  printf("//yfs// getdir %016llx\n", inum);
  release:
   return r;
 }
@@ -103,6 +102,9 @@ yfs_client::create(inum parent,const char* name,inum &inum){
 
 int
   yfs_client::createHelper(inum parent,const char* name,inum &inum,int type){
+  //lock the parent dir
+  lock_client::ScopedLock dirlock(lc,parent);
+
   int r =OK;
   //check if the file is exist
   int inode=-1;
@@ -132,7 +134,6 @@ int
 
   //generate the file's inum
   //FIXME
-  //srandom(time(NULL));
   inum = random();
   if(type == 0)
 	inum |= 0x80000000;
@@ -152,6 +153,8 @@ int
 	r = IOERR;
 	goto release;
   }
+  //lock the new created file
+  //lock_client::ScopedLock filelock(lc,inum);
 
   //add the file to the dir
   os<<content;
@@ -222,6 +225,9 @@ int yfs_client::lookup(inum parent,const char* name,inum& finum){
 
 int
 yfs_client::setattr_size(inum finum,unsigned long long size){
+  //lock file
+  lock_client::ScopedLock filelock(lc,finum);
+
   std::string message = "#";
   message += filename(size);
   int re =  ec->put(finum,message);
@@ -264,6 +270,9 @@ yfs_client::read(inum finum,unsigned long long size,
 int
 yfs_client::write(inum finum,unsigned long long size, 
 				  unsigned long long off, const char* buf){
+  //lock file
+  lock_client::ScopedLock filelock(lc,finum);
+
   std::string content;
   int re = ec->get(finum,content);
   if(re!=extent_protocol::OK){
@@ -310,6 +319,9 @@ int yfs_client::mkdir(inum parent, const char* name,inum &dinum){
 }
 
 int yfs_client::unlink(inum parent,const char* name ){
+  //lock dir
+  lock_client::ScopedLock dirlock(lc,parent);
+
   std::string content;
   int ret = ec->get(parent,content);
   if(ret!=extent_protocol::OK)
@@ -348,6 +360,10 @@ int yfs_client::unlink(inum parent,const char* name ){
   ret = ec->put(parent,os.str());
   if(ret!=extent_protocol::OK)
 	return checkErrorCode(ret);
+
+  //lock file
+  lock_client::ScopedLock filelock(lc,fnode);
+
   //remove it from extent server
   ret = ec->remove(fnode);
   if(ret!=extent_protocol::OK)

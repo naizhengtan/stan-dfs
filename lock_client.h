@@ -10,6 +10,20 @@
 
 // Client interface to the lock server
 class lock_client {
+ public:
+  class ScopedLock{
+	lock_protocol::lockid_t lid;
+	lock_client* lc;
+  public:
+	ScopedLock(lock_client* lclient,lock_protocol::lockid_t id){
+	  lid = id;
+	  lc = lclient;
+	  lc->acquire(id);
+	}
+	~ScopedLock(){
+	  lc->release(lid);
+	}
+  };
  protected:
   rpcc *cl;
  public:
