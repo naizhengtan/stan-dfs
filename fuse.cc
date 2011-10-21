@@ -154,6 +154,7 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
   }
   else{
 	fuse_reply_write(req, size);
+	dprintf("//fuse// write to file %016llx\n",ino);
   }
 }
 
@@ -172,7 +173,7 @@ fuseserver_createhelper(fuse_ino_t parent, const char *name,
   if(ret!=yfs_client::OK){
 	//FIXME
   }
-  dprintf("//fuse// create from yfs %016llx success:%d\n",inum,(ret==yfs_client::OK));
+  dprintf("//fuse// create file %016llx[%s] from parent %016llx success:%d\n",inum,name,parent,(ret==yfs_client::OK));
   e->ino = inum;
   //check whether the file exists
   if(ret==yfs_client::EXIST)
@@ -335,11 +336,34 @@ fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
   e.generation = 0;
 
   // You fill this in for Lab 3
+  yfs_client::inum inum;
+  yfs_client::status ret = yfs->mkdir((yfs_client::inum)parent, name , inum);
+  //check whether the file exists
+  if(ret==yfs_client::EXIST){
+	fuse_reply_err(req,EEXIST);
+	return;
+  }
+  else if(ret!=yfs_client::OK){
+	//FIXME
+	fuse_reply_err(req, ENOSYS);
+	return;
+  }
+  dprintf("//fuse// create dir %016llx[%s] to parent %016llx success:%d\n",inum,name,parent,(ret==yfs_client::OK));
+  e.ino = inum;
+  ret = getattr(e.ino,e.attr);
+  if(ret != yfs_client::OK){
+	fuse_reply_err(req, ENOSYS);//FIXME
+	return;
+  }
+  fuse_reply_entry(req,&e);
+
+/**
 #if 0
   fuse_reply_entry(req, &e);
 #else
   fuse_reply_err(req, ENOSYS);
-#endif
+  #endif
+*/
 }
 
 void
@@ -349,7 +373,16 @@ fuseserver_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
   // You fill this in for Lab 3
   // Success:	fuse_reply_err(req, 0);
   // Not found:	fuse_reply_err(req, ENOENT);
-  fuse_reply_err(req, ENOSYS);
+
+  int ret = yfs->unlink(parent,name);
+
+  if(ret==yfs_client::OK){
+	fuse_reply_err(req, 0);
+  }else if(ret == yfs_client::NOENT){
+	fuse_reply_err(req,ENOENT);
+  }else{
+	fuse_reply_err(req, ENOSYS);
+  }
 }
 
 void

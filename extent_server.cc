@@ -33,7 +33,7 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 	  is>>sign;
 	  is>>nsize;
 	  it->second.attr.size = nsize;
-	  it->second.attr.ctime = time(NULL);
+	  it->second.attr.ctime=it->second.attr.mtime = time(NULL);
 	  //do the truncating or expanding thing
 	  //get name
 	  std::istringstream names(it->second.value);
@@ -59,7 +59,8 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
   //new or modify a file
   unsigned int old_ctime = 0;
   if(exist){
-	old_ctime = it->second.attr.ctime;
+	//?? put() means ctime,mtime,atime all Change??
+   	//old_ctime = it->second.attr.ctime;
 	extent_map.erase(id);
   }
 

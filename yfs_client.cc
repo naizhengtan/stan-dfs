@@ -97,18 +97,26 @@ yfs_client::getdir(inum inum, dirinfo &din)
 
 int
 yfs_client::create(inum parent,const char* name,inum &inum){
+  int ret = createHelper(parent,name,inum,0);
+  return ret;
+}
+
+int
+  yfs_client::createHelper(inum parent,const char* name,inum &inum,int type){
   int r =OK;
   //check if the file is exist
   int inode=-1;
   std::string content,fname,dirname;
   std::ostringstream os;
+  std::string fullName(name);
+
   int re = ec->get(parent,content);//??content
   if(re != extent_protocol::OK){
 	return re;
   }
   std::istringstream is(content);
   is>>dirname;//eliminate dir's name
-  printf("!!\n%s %s \n!!",dirname.c_str(),content.c_str());
+  printf("==current dir==\n%s \n====\n",content.c_str());
   do{
 	is>>fname;//get the file name
 	is>>inode;//get the inum of the file
@@ -126,11 +134,16 @@ yfs_client::create(inum parent,const char* name,inum &inum){
   //FIXME
   //srandom(time(NULL));
   inum = random();
-  inum |= 0x80000000;
+  if(type == 0)
+	inum |= 0x80000000;
+  else if(type==1)
+	inum &= 0x7FFFFFFF;
   printf("//yfs// create file %016llx [%s]\n",inum,name);
 
   //new (name,inum), add node in extent_server
-  re = ec->put(inum,name);
+  fullName+='\n';
+  //re = ec->put(inum,name);
+  re = ec -> put(inum,fullName.c_str());
   if(re == extent_protocol::NOENT){//the inum is collision,FIXME
 	r = EXIST;
 	goto release;
@@ -282,6 +295,76 @@ yfs_client::write(inum finum,unsigned long long size,
 	return IOERR;
   }
   printf("//yfs// write to file%016llx size:%d off:%d\n",finum,size,off);
-  printf("content:====\n%s\n=====",buf);
+  printf("content:====\n%s\n=====\n",buf);
   return OK;
+}
+
+//very similar to the file creation
+//FIXME
+//replica of function:create
+int yfs_client::mkdir(inum parent, const char* name,inum &dinum){
+  
+  int ret = createHelper(parent,name,dinum,1);
+  return ret;
+
+}
+
+int yfs_client::unlink(inum parent,const char* name ){
+  std::string content;
+  int ret = ec->get(parent,content);
+  if(ret!=extent_protocol::OK)
+	return ret;
+  inum fnode=-1,loop_inode=-1;
+  int exist=0;
+  std::string loop_fname,dirname;
+  std::istringstream is(content);
+  std::ostringstream os;
+
+  is>>dirname;//eliminate the dir name
+  os<<dirname<<"\n";
+  printf("!!!%s\n",dirname.c_str());
+  do{
+	is>>loop_fname;//file name
+	is>>loop_inode;//file node
+	printf("====%s %s %d %d====\n",loop_fname.c_str(),name,loop_inode,(loop_fname == name));
+	if(loop_inode == -1)
+	  break;
+	if(loop_fname == name){
+	  fnode = loop_inode;
+	  exist=1;
+	  loop_inode=-1;
+	  continue;
+	}
+	os<<loop_fname<<"\n";
+	os<<loop_inode<<"\n";
+	loop_inode = -1;
+  }while(!is.eof());
+
+  //replace the parent's content
+  if(exist==0)
+	return NOENT;
+
+  //remove the file/dir from its parent dir
+  ret = ec->put(parent,os.str());
+  if(ret!=extent_protocol::OK)
+	return checkErrorCode(ret);
+  //remove it from extent server
+  ret = ec->remove(fnode);
+  if(ret!=extent_protocol::OK)
+	return checkErrorCode(ret);
+  printf("//yfs// remove the [%s] from parent:%016llx\n",name,parent);
+  return OK;
+}
+
+int yfs_client::checkErrorCode(int err){
+  if(err == extent_protocol::RPCERR){
+	printf("===CHECK ERROR CODE=== RPCERR\n");
+	return RPCERR;
+  }else if(err == extent_protocol::NOENT){
+	printf("===CHECK ERROR CODE=== NOENT\n");
+	return NOENT;
+  }else if(err == extent_protocol::IOERR){
+	printf("===CHECK ERROR CODE=== IOERR\n");
+	return IOERR;
+  }
 }

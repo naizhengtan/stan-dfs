@@ -53,6 +53,10 @@ class yfs_client {
   int setattr_size(inum,unsigned long long);
   int read(inum,unsigned long long,unsigned long long,char*);
   int write(inum,unsigned long long, unsigned long long, const char*);
+  int mkdir(inum, const char*,inum &);
+  int unlink(inum,const char*);
+  int createHelper(inum,const char*,inum&,int);
+  int checkErrorCode(int);
 };
 
 #endif 
