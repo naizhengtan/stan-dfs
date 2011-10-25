@@ -17,7 +17,6 @@ main(int argc, char *argv[])
   }
 
   setvbuf(stdout, NULL, _IONBF, 0);
-
   char *count_env = getenv("RPC_COUNT");
   if(count_env != NULL){
     count = atoi(count_env);
@@ -25,7 +24,7 @@ main(int argc, char *argv[])
 
   rpcs server(atoi(argv[1]), count);
   extent_server ls;
-
+  
   server.reg(extent_protocol::get, &ls, &extent_server::get);
   server.reg(extent_protocol::getattr, &ls, &extent_server::getattr);
   server.reg(extent_protocol::put, &ls, &extent_server::put);

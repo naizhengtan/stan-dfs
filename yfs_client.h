@@ -5,12 +5,14 @@
 //#include "yfs_protocol.h"
 #include "extent_client.h"
 #include <vector>
+#include <map>
 
 #include "lock_protocol.h"
 #include "lock_client.h"
 
 class yfs_client {
   extent_client *ec;
+  lock_client *lc;
  public:
 
   typedef unsigned long long inum;
@@ -45,6 +47,17 @@ class yfs_client {
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
+  //lab2 code
+  int create(inum,const char*,inum &);
+  int readdir(inum,std::map<std::string,inum>&);
+  int lookup(inum,const char*,inum&);
+  int setattr_size(inum,unsigned long long);
+  int read(inum,unsigned long long,unsigned long long,char*);
+  int write(inum,unsigned long long, unsigned long long, const char*);
+  int mkdir(inum, const char*,inum &);
+  int unlink(inum,const char*);
+  int createHelper(inum,const char*,inum&,int);
+  int checkErrorCode(int);
 };
 
 #endif 

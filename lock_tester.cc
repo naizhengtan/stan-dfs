@@ -173,9 +173,15 @@ main(int argc, char *argv[])
 
     VERIFY(pthread_mutex_init(&count_mutex, NULL) == 0);
 
+	//<<<<<<< HEAD:lock_tester.cc
     printf("cache lock client\n");
     for (int i = 0; i < nt; i++) lc[i] = new lock_client_cache(dst);
 
+	/*=======
+    printf("simple lock client\n");
+	while(1){
+    for (int i = 0; i < nt; i++) lc[i] = new lock_client(dst);
+	>>>>>>> lab3:lock_tester.cc*/
     if(!test || test == 1){
       test1();
     }
@@ -190,7 +196,7 @@ main(int argc, char *argv[])
       for (int i = 0; i < nt; i++) {
 	pthread_join(th[i], NULL);
       }
-    }
+	  //}
 
     if(!test || test == 3){
       printf("test 3\n");
@@ -236,5 +242,5 @@ main(int argc, char *argv[])
     }
 
     printf ("%s: passed all tests successfully\n", argv[0]);
-
+	}
 }

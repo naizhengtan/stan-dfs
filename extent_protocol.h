@@ -6,6 +6,7 @@
 #include "rpc.h"
 
 class extent_protocol {
+
  public:
   typedef int status;
   typedef unsigned long long extentid_t;

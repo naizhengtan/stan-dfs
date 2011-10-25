@@ -40,9 +40,9 @@ class rpcc : public chanmgr {
 
 			unsigned int xid;
 			unmarshall *un;
-			int intret;
-			bool done;
-			pthread_mutex_t m;
+		  int intret; // state in rpc_const
+		    bool done;
+			pthread_mutex_t m; 
 			pthread_cond_t c;
 		};
 
@@ -50,12 +50,12 @@ class rpcc : public chanmgr {
 		void update_xid_rep(unsigned int xid);
 
 
-		sockaddr_in dst_;
-		unsigned int clt_nonce_;
-		unsigned int srv_nonce_;
-		bool bind_done_;
-		unsigned int xid_;
-		int lossytest_;
+		sockaddr_in dst_;      // Structure describing an Internet socket address. 
+		unsigned int clt_nonce_; //if retrans==true, value is random, else value is 0
+		unsigned int srv_nonce_; //set to the value of ??? in bind()
+		bool bind_done_;  //set to true in bind()
+		unsigned int xid_; //count the number of caller
+		int lossytest_;  //from the environment value:RPC_LOSSY
 		bool retrans_;
 		bool reachable_;
 
@@ -64,10 +64,11 @@ class rpcc : public chanmgr {
 		pthread_mutex_t m_; // protect insert/delete to calls[]
 		pthread_mutex_t chan_m_;
 
-		bool destroy_wait_;
+		bool destroy_wait_; //when destroy the rpcc,this is set to be true,no request will be sent
 		pthread_cond_t destroy_wait_c_;
 
 		std::map<int, caller *> calls_;
+
 		std::list<unsigned int> xid_rep_window_;
                 
                 struct request {
@@ -287,6 +288,7 @@ class rpcs : public chanmgr {
 	// provide at most once semantics by maintaining a window of replies
 	// per client that that client hasn't acknowledged receiving yet.
 	std::map<unsigned int, std::list<reply_t> > reply_window_;
+	std::map<unsigned int, unsigned int> rereply_window_;
 
 	void free_reply_window(void);
 	void add_reply(unsigned int clt_nonce, unsigned int xid, char *b, int sz);
@@ -309,6 +311,7 @@ class rpcs : public chanmgr {
 	bool reachable_;
 
 	// map proc # to function
+	// the hadlers are maped here as (proc,halder)
 	std::map<int, handler *> procs_;
 
 	pthread_mutex_t procs_m_; // protect insert/delete to procs[]

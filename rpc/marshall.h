@@ -14,8 +14,8 @@
 struct req_header {
 	req_header(int x=0, int p=0, int c = 0, int s = 0, int xi = 0):
 		xid(x), proc(p), clt_nonce(c), srv_nonce(s), xid_rep(xi) {}
-	int xid;
-	int proc;
+	int xid; 
+	int proc; 
 	unsigned int clt_nonce;
 	unsigned int srv_nonce;
 	int xid_rep;
