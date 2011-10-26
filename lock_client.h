@@ -11,16 +11,16 @@
 // Client interface to the lock server
 class lock_client {
  public:
-  class ScopedLock{
+  class rScopedLock{
 	lock_protocol::lockid_t lid;
 	lock_client* lc;
   public:
-	ScopedLock(lock_client* lclient,lock_protocol::lockid_t id){
+	rScopedLock(lock_client* lclient,lock_protocol::lockid_t id){
 	  lid = id;
 	  lc = lclient;
 	  lc->acquire(id);
 	}
-	~ScopedLock(){
+	~rScopedLock(){
 	  lc->release(lid);
 	}
   };

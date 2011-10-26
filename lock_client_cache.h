@@ -10,6 +10,8 @@
 #include "lock_client.h"
 #include "lang/verify.h"
 
+#include <map>
+#include <pthread.h>
 
 // Classes that inherit lock_release_user can override dorelease so that 
 // that they will be called when lock_client releases a lock.
@@ -26,6 +28,25 @@ class lock_client_cache : public lock_client {
   int rlock_port;
   std::string hostname;
   std::string id;
+
+  //===stan added===
+  enum statoflock{NONE,FREE,LOCKED,ACQUIRING,RELEASING};
+  typedef struct{
+	statoflock state;
+	pthread_cond_t cond_v; //init no free
+	//pthread_cond_t retry;
+	pthread_mutex_t mux;
+	pthread_mutex_t acq;
+	bool retry;
+	//int count;
+  } lock_t;
+  typedef unsigned long long inum;
+  typedef std::map<lock_protocol::lockid_t,lock_t > cached_lock;
+
+  cached_lock lock_pool;
+  pthread_mutex_t mutex;
+  //================
+
  public:
   static int last_port;
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);

@@ -103,7 +103,7 @@ yfs_client::create(inum parent,const char* name,inum &inum){
 int
   yfs_client::createHelper(inum parent,const char* name,inum &inum,int type){
   //lock the parent dir
-  lock_client::ScopedLock dirlock(lc,parent);
+  lock_client::rScopedLock dirlock(lc,parent);
 
   int r =OK;
   //check if the file is exist
@@ -226,7 +226,7 @@ int yfs_client::lookup(inum parent,const char* name,inum& finum){
 int
 yfs_client::setattr_size(inum finum,unsigned long long size){
   //lock file
-  lock_client::ScopedLock filelock(lc,finum);
+  lock_client::rScopedLock filelock(lc,finum);
 
   std::string message = "#";
   message += filename(size);
@@ -271,7 +271,7 @@ int
 yfs_client::write(inum finum,unsigned long long size, 
 				  unsigned long long off, const char* buf){
   //lock file
-  lock_client::ScopedLock filelock(lc,finum);
+  lock_client::rScopedLock filelock(lc,finum);
 
   std::string content;
   int re = ec->get(finum,content);
@@ -320,7 +320,7 @@ int yfs_client::mkdir(inum parent, const char* name,inum &dinum){
 
 int yfs_client::unlink(inum parent,const char* name ){
   //lock dir
-  lock_client::ScopedLock dirlock(lc,parent);
+  lock_client::rScopedLock dirlock(lc,parent);
 
   std::string content;
   int ret = ec->get(parent,content);
@@ -362,7 +362,7 @@ int yfs_client::unlink(inum parent,const char* name ){
 	return checkErrorCode(ret);
 
   //lock file
-  lock_client::ScopedLock filelock(lc,fnode);
+  lock_client::rScopedLock filelock(lc,fnode);
 
   //remove it from extent server
   ret = ec->remove(fnode);
