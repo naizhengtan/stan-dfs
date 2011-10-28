@@ -34,6 +34,7 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 {
   //check if the lock is in the pool
   int ret = lock_protocol::OK;
+  int r;
 
   pthread_mutex_lock(&mutex);
   cached_lock::iterator it = lock_pool.find(lid);
@@ -56,30 +57,47 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 
   //check the state of lock
   //FIXME: concurrentcy bug here
+
   ScopedLock acq(&it->second.acq);
+ CHECK_STATE:
   if(it->second.state == NONE){
 	it->second.state = ACQUIRING;
 	while(1){
-	  ret = lock_client::acquire(lid); //RPC happens
-	  if(ret==lock_protocol::RETRY){
+	  //tprintf("client: [%s] acquire lock %llx",id.c_str(),lid);
+	  ret = cl->call(lock_protocol::acquire,lid,id,r); //RPC happens
+	  //printf("...\n");
+	  assert(ret==lock_protocol::OK);
+	  if(r==lock_protocol::RETRY){//wait in the cond_v
+		//considering retry before RETRY
 		if(it->second.retry){
+		  //FIXME:whether the retry can be set?
 		  it->second.retry = false;
 		  continue;
 		}
-		pthread_cond_wait(&it->second.cond_v,&it->second.acq);
+		pthread_cond_wait(&it->second.cond_v,&it->second.acq); //waiting point[1]
 	  }
-	  else
+	  else if(r==lock_protocol::OK){//get the lock
+		it->second.state = LOCKED;
+		it->second.retry = false;
 		break;
+	  }else{
+		printf("????%d %d\n",r,ret);
+		assert(0);
+	  }
 	}
-	assert(ret==lock_protocol::OK);
-	it->second.state = LOCKED;
   }
   else if(it->second.state == FREE){
 	it->second.state = LOCKED;	
   }
+  //FIXME: problem here when revoke happens
   else if(it->second.state == LOCKED || it->second.state == ACQUIRING){// acquiring/locked
-	//while(it->second.state==LOCKED)
-	pthread_cond_wait(&it->second.cond_v,&it->second.acq);
+	while(it->second.state!=FREE){
+	  pthread_cond_wait(&it->second.cond_v,&it->second.acq);//waiting point[2]
+	  if(it->second.retry)
+		pthread_cond_signal(&it->second.cond_v);
+	  if(it->second.state==NONE)
+		goto CHECK_STATE;
+	}
 	it->second.state=LOCKED;
   }else if(it->second.state==RELEASING){//releasing(release success should call signal)
 	//???
@@ -112,6 +130,7 @@ rlock_protocol::status
 lock_client_cache::revoke_handler(lock_protocol::lockid_t lid, 
                                   int &)
 {
+  int r,ret;
   cached_lock::iterator it = lock_pool.find(lid);
   if(it==lock_pool.end()){
 	printf("---ERROR---\nSHOULD NEVER BE HERE!!!\n");
@@ -119,12 +138,14 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
   }
 
   ScopedLock acq(&it->second.acq);
-  while(it->second.state == LOCKED)
+  while(it->second.state != FREE)
 	pthread_cond_wait(&it->second.cond_v,&it->second.acq);
+
   it->second.state = RELEASING;
-  int ret = lock_client::release(lid); //RPC happens
+  ret = cl->call(lock_protocol::release,lid,id,r);//RPC happens
   assert(ret==rlock_protocol::OK);
   it->second.state = NONE;
+
   return ret;
 }
 
@@ -138,11 +159,12 @@ lock_client_cache::retry_handler(lock_protocol::lockid_t lid,
 	assert(0);
   }
 
-  //ScopedLock acq(&it->second.acq);
+  ScopedLock acq(&it->second.acq);
   //FIXME: MAY have some bugs here...
   if(!it->second.retry)
 	it->second.retry = true;
   pthread_cond_signal(&it->second.cond_v);
+  //pthread_cond_broadcast(&it->second.cond_v);
   int ret = rlock_protocol::OK;
   return ret;
 }
