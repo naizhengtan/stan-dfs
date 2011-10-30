@@ -238,6 +238,7 @@ createn(const char *d, const char *prefix, int nf, bool possible_dup)
 
   for(i = 0; i < nf; i++){
     sprintf(n, "%s/%s-%d", d, prefix, i);
+	printf("create %s\n",n);
     fd = creat(n, 0666);
     if (fd < 0 && possible_dup && errno == EEXIST)
       continue;
@@ -302,6 +303,7 @@ unlinkn(const char *d, const char *prefix, int nf)
 
   for(i = 0; i < nf; i++){
     sprintf(n, "%s/%s-%d", d, prefix, i);
+	printf("Unlink %s\n",n);
     if(unlink(n) != 0){
       fprintf(stderr, "test-lab-3-b: unlink(%s): %s\n",
               n, strerror(errno));
@@ -409,6 +411,44 @@ main(int argc, char *argv[])
     big[i] = 'x';
   for(i = 0; i < sizeof(huge)-1; i++)
     huge[i] = '0';
+
+
+  /*
+  printf("Concurrent create/delete: ");
+  createn(d1, "x1", 20, false);
+  createn(d2, "x2", 20, false);
+  pid = fork();
+  if(pid < 0){
+    perror("test-lab-3-b: fork");
+    exit(1);
+  }
+  if(pid == 0){
+	printf("child:");
+    unlinkn(d2, "x1", 20);
+	printf("over");
+    createn(d1, "x3", 20, false);
+	printf("over\n");
+    exit(0);
+  }
+  printf("parent:");
+  createn(d1, "x4", 20, false);
+	printf("~~~\n");
+  reap(pid);
+  printf("~~~\n");
+  unlinkn(d2, "x2", 20);
+	printf("~~~\n");
+  unlinkn(d2, "x4", 20);
+	printf("~~~\n");
+  unlinkn(d2, "x3", 20);
+	printf("over\n");
+  dircheck(d1, 0);
+  printf("OK\n");
+*/
+
+
+
+
+
 
   printf("Create then read: ");
   create1(d1, "f1", "aaa");
@@ -520,6 +560,8 @@ main(int argc, char *argv[])
   unlinkn(d1, "zz", 20);
   printf("OK\n");
 
+
+
   printf("Concurrent create/delete: ");
   createn(d1, "x1", 20, false);
   createn(d2, "x2", 20, false);
@@ -529,17 +571,28 @@ main(int argc, char *argv[])
     exit(1);
   }
   if(pid == 0){
+	printf("child:");
     unlinkn(d2, "x1", 20);
+	printf("over");
     createn(d1, "x3", 20, false);
+	printf("over\n");
     exit(0);
   }
+  printf("parent:");
   createn(d1, "x4", 20, false);
+	printf("~~~\n");
   reap(pid);
+  printf("~~~\n");
   unlinkn(d2, "x2", 20);
+	printf("~~~\n");
   unlinkn(d2, "x4", 20);
+	printf("~~~\n");
   unlinkn(d2, "x3", 20);
+	printf("over\n");
   dircheck(d1, 0);
   printf("OK\n");
+
+
 
   printf("Concurrent creates, same file, same server: ");
   pid = fork();

@@ -2,20 +2,22 @@
 #include "yfs_client.h"
 #include "extent_client.h"
 #include "lock_client.h"
+#include "lock_client_cache.h"
 #include <sstream>
 #include <iostream>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <fcntl.h>
 
 
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
-  lc = new lock_client(lock_dst);
-  //lc = new lock_client_cache(lock_dst);
+  //lc = new lock_client(lock_dst);
+  lc = new lock_client_cache(lock_dst);
   srandom(getpid());
 }
 
@@ -101,9 +103,25 @@ yfs_client::create(inum parent,const char* name,inum &inum){
   return ret;
 }
 
+
+unsigned long long 
+generateInode(int type){
+  timeval now;
+  gettimeofday(&now,NULL);
+  unsigned long long inum = /*now.tv_usec%100+*/random()*100+getpid()%100;
+  if(type == 0)
+	inum |= 0x80000000;
+  else if(type==1)
+	inum &= 0x7FFFFFFF;
+  return inum;
+}
+
+
+
 int
   yfs_client::createHelper(inum parent,const char* name,inum &inum,int type){
   //lock the parent dir
+  printf("//yfs// hold lock %llx\n",parent);
   lock_client::rScopedLock dirlock(lc,parent);
 
   int r =OK;
@@ -135,13 +153,8 @@ int
 
   //generate the file's inum
   //FIXME
-  inum = random();
-  if(type == 0)
-	inum |= 0x80000000;
-  else if(type==1)
-	inum &= 0x7FFFFFFF;
+  inum = generateInode(type);
   printf("//yfs// create file %016llx [%s]\n",inum,name);
-
   //new (name,inum), add node in extent_server
   fullName+='\n';
   //re = ec->put(inum,name);
@@ -321,6 +334,7 @@ int yfs_client::mkdir(inum parent, const char* name,inum &dinum){
 
 int yfs_client::unlink(inum parent,const char* name ){
   //lock dir
+  printf("//yfs// hold lock %llx\n",parent);
   lock_client::rScopedLock dirlock(lc,parent);
 
   std::string content;
@@ -342,7 +356,8 @@ int yfs_client::unlink(inum parent,const char* name ){
 	printf("====%s %s %d %d====\n",loop_fname.c_str(),name,loop_inode,(loop_fname == name));
 	if(loop_inode == -1)
 	  break;
-	if(loop_fname == name){
+	//if(loop_fname == name){
+	if(loop_fname == name && isfile(loop_inode)){
 	  fnode = loop_inode;
 	  exist=1;
 	  loop_inode=-1;
@@ -357,12 +372,13 @@ int yfs_client::unlink(inum parent,const char* name ){
   if(exist==0)
 	return NOENT;
 
-  //remove the file/dir from its parent dir
+  //remove the file from its parent dir
   ret = ec->put(parent,os.str());
   if(ret!=extent_protocol::OK)
 	return checkErrorCode(ret);
 
   //lock file
+  printf("//yfs// hold lock %llx\n",fnode);
   lock_client::rScopedLock filelock(lc,fnode);
 
   //remove it from extent server

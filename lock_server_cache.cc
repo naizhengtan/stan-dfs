@@ -9,32 +9,60 @@
 #include "handle.h"
 #include "tprintf.h"
 
+#include <pthread.h>
+#include <errno.h>
+#include <signal.h>
+#include <set>
+
 
 void *wakeup(void*);
+
+int isThreadAlive(pthread_t &thread_id){
+  int kill_rc = pthread_kill(thread_id,0);
+
+  if(kill_rc == ESRCH)
+	//printf("the specified thread did not exists or already quit/n");
+	return 0;
+  else if(kill_rc == EINVAL)
+	//printf("signal is invalid/n");
+	return -1;
+  else
+	//printf("the specified thread is alive/n");
+	return 1;
+	}
+
 
 void * check(void *lockset){
   lock_server_cache::lock_map *lock_set = (lock_server_cache::lock_map *)lockset;
   lock_server_cache::lock_map::iterator it;
-  std::deque<pthread_t*> threads;
+  std::set<pthread_t*> threads;
   while(1){
+	//printf("-------checker check-----\n");
 	it = lock_set->begin();
 	for(;it!=lock_set->end();it++){
 	  if(!it->second.wqueue.empty()){
+		if(threads.find(&it->second.awake)!=threads.end())//exist
+		  continue;
+		printf("create awake for lock %llx \n",it->second.lockid);
 		if(pthread_create(&it->second.awake,NULL,wakeup,&it->second)){
 		  printf("ERROR: CANNOT CREATE WAKEUP THREAD!\n");
 		  assert(0);
 		}
-		threads.push_back(&it->second.awake);
+		//pthread_detach(it->second.awake);
+		threads.insert(&it->second.awake);
 	  }
 	}
-	std::deque<pthread_t*>::iterator join = threads.begin();
+	std::set<pthread_t*>::iterator join = threads.begin();
 	for(;join!=threads.end();join++){
-	  if(pthread_join(**join,NULL)){
-		printf("ERROR: CANNOT JOIN WAKEUP THREAD!\n");
-		assert(0);
+	  if(isThreadAlive(**join)==0){//if the thread is over
+		if(pthread_join(**join,NULL)){//collect it
+		  printf("ERROR: CANNOT JOIN WAKEUP THREAD!\n");
+		  assert(0);
+		}
+		threads.erase(join);//threads maintain the live threads
 	  }
 	}
-	threads.clear();
+	//threads.clear();
   }
 }
 
@@ -47,24 +75,23 @@ void *wakeup(void* lf){
   **/
   //revoke
   std::string old = lockinfo->current;
-  printf("===revoke[%s]:\n",lockinfo->current.c_str());
+  printf("===revoke[%s]%llx:...",lockinfo->current.c_str(),lockinfo->lockid);
   handle h(lockinfo->current);
-  printf("===revoke[%s]:\n",lockinfo->current.c_str());
   if(h.safebind()){
 	ret = h.safebind()->call(rlock_protocol::revoke,lockinfo->lockid,r);
 	if(ret!=lock_protocol::OK){
-	  printf("ERROR \n");
+	  printf("ERROR %d\n",ret);
 	  assert(0);
 	}
   }else{
 	printf("**ERROR** revoke [%s][%s] bind failed!\n",lockinfo->current.c_str(),old.c_str());
   }
-  
+  printf("...done\n");
   //retry
   //std::string next = lockinfo->wqueue.front();
   std::string next = lockinfo->current;
   handle hr(next);
-  printf("===retry:\n");
+  printf("===retry[%s]%llx:...",next.c_str(),lockinfo->lockid);
   if(hr.safebind()){
 	ret = hr.safebind()->call(rlock_protocol::retry,lockinfo->lockid,r);
 	if(ret!=lock_protocol::OK){
@@ -74,6 +101,8 @@ void *wakeup(void* lf){
   }else{
 	printf("**ERROR** retry [%s] bind failed!\n",next.c_str());
   }
+  printf("...done\n");
+  pthread_exit(NULL);
 }
 
 

@@ -18,10 +18,15 @@ class lock_client {
 	rScopedLock(lock_client* lclient,lock_protocol::lockid_t id){
 	  lid = id;
 	  lc = lclient;
-	  lc->acquire(id);
+	  printf("//yfs// hold lock %llx...",lid);
+	  int ret = lc->acquire(id);
+	  printf("..done\n");
+	  assert(ret==lock_protocol::OK);
 	}
 	~rScopedLock(){
+	  printf("//yfs// release lock %llx..\n",lid);
 	  lc->release(lid);
+	  printf("..done\n");
 	}
   };
  protected:

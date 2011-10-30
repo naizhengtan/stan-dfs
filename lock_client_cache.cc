@@ -138,8 +138,10 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
   }
 
   ScopedLock acq(&it->second.acq);
-  while(it->second.state != FREE)
+  while(it->second.state != FREE){
 	pthread_cond_wait(&it->second.cond_v,&it->second.acq);
+	printf("check revoke!\n");
+  }
 
   it->second.state = RELEASING;
   ret = cl->call(lock_protocol::release,lid,id,r);//RPC happens

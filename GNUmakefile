@@ -80,7 +80,7 @@ endif
 ifeq ($(LAB6GE),1)
 lock_server+= $(rsm_files)
 endif
-lock_server : $(patsubst %.cc,%.o,$(lock_server)) rpc/librpc.a
+lock_server : $(patsubst %.cc,%.o,$(lock_server)) rpc/librpc.a #-lpthread
 
 yfs_client=yfs_client.cc extent_client.cc fuse.cc
 ifeq ($(LAB3GE),1)
